@@ -2,12 +2,14 @@ import PyPDF2
 import re
 from typing import Dict, List, Optional, Any
 from .models import ContractData, Party, AccountInfo, FinancialDetails, LineItem, PaymentTerms, RevenueClassification, SLA
+from .enhanced_parser import EnhancedContractParser
 import logging
 
 logger = logging.getLogger(__name__)
 
 class ContractParser:
     def __init__(self):
+        self.enhanced_parser = EnhancedContractParser()
         self.patterns = {
             'email': r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b',
             'phone': r'(\+?1[-.\s]?)?\(?([0-9]{3})\)?[-.\s]?([0-9]{3})[-.\s]?([0-9]{4})',
@@ -19,8 +21,19 @@ class ContractParser:
             'address': r'\d+\s+[A-Za-z0-9\s,.-]+(?:Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Drive|Dr|Lane|Ln)',
         }
 
-    async def parse_contract(self, file_path: str) -> Dict[str, Any]:
-        """Parse a contract PDF and extract structured data"""
+    async def parse_contract(self, file_path: str) -> ContractData:
+        """Parse a contract PDF and extract structured data using enhanced parser"""
+        try:
+            # Use enhanced parser for better extraction
+            return await self.enhanced_parser.parse_contract(file_path)
+            
+        except Exception as e:
+            logger.error(f"Error parsing contract: {str(e)}")
+            # Fallback to basic parsing
+            return await self._parse_contract_basic(file_path)
+    
+    async def _parse_contract_basic(self, file_path: str) -> ContractData:
+        """Basic contract parsing as fallback"""
         try:
             # Extract text from PDF
             text = await self._extract_text_from_pdf(file_path)
@@ -38,21 +51,21 @@ class ContractParser:
                 parties, account_info, financial_details, payment_terms, revenue_classification, sla
             )
             
-            return {
-                "parties": [party.dict() for party in parties],
-                "account_info": account_info.dict() if account_info else None,
-                "financial_details": financial_details.dict() if financial_details else None,
-                "payment_terms": payment_terms.dict() if payment_terms else None,
-                "revenue_classification": revenue_classification.dict() if revenue_classification else None,
-                "sla": sla.dict() if sla else None,
-                "contract_start_date": self._extract_dates(text, "start"),
-                "contract_end_date": self._extract_dates(text, "end"),
-                "contract_type": self._extract_contract_type(text),
-                "confidence_scores": confidence_scores
-            }
+            return ContractData(
+                parties=parties,
+                account_info=account_info,
+                financial_details=financial_details,
+                payment_terms=payment_terms,
+                revenue_classification=revenue_classification,
+                sla=sla,
+                contract_start_date=self._extract_dates(text, "start"),
+                contract_end_date=self._extract_dates(text, "end"),
+                contract_type=self._extract_contract_type(text),
+                confidence_scores=confidence_scores
+            )
         
         except Exception as e:
-            logger.error(f"Error parsing contract: {str(e)}")
+            logger.error(f"Error in basic contract parsing: {str(e)}")
             raise
 
     async def _extract_text_from_pdf(self, file_path: str) -> str:

@@ -1,7 +1,8 @@
-from pydantic import BaseModel
-from typing import List, Optional, Dict, Any
+from pydantic import BaseModel, Field, validator
+from typing import List, Optional, Dict, Any, Union
 from datetime import datetime
 from enum import Enum
+import re
 
 class ContractStatus(str, Enum):
     PENDING = "pending"
@@ -18,6 +19,16 @@ class Party(BaseModel):
     email: Optional[str] = None
     phone: Optional[str] = None
     role: str  # customer, vendor, third_party
+    confidence_score: float = Field(default=0.0, ge=0.0, le=1.0)
+    tax_id: Optional[str] = None
+    website: Optional[str] = None
+    jurisdiction: Optional[str] = None
+    
+    @validator('email')
+    def validate_email(cls, v):
+        if v and not re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', v):
+            return None
+        return v
 
 class AccountInfo(BaseModel):
     account_number: Optional[str] = None
@@ -62,6 +73,23 @@ class SLA(BaseModel):
     support_terms: Optional[str] = None
     maintenance_terms: Optional[str] = None
 
+class KeyValuePair(BaseModel):
+    key: str
+    value: str
+    confidence: float = Field(default=0.0, ge=0.0, le=1.0)
+    field_type: str  # text, number, date, email, phone, etc.
+
+class DocumentMetadata(BaseModel):
+    total_pages: int
+    file_size: int
+    creation_date: Optional[str] = None
+    modification_date: Optional[str] = None
+    author: Optional[str] = None
+    title: Optional[str] = None
+    subject: Optional[str] = None
+    keywords: Optional[str] = None
+    producer: Optional[str] = None
+
 class ContractData(BaseModel):
     parties: List[Party] = []
     account_info: Optional[AccountInfo] = None
@@ -73,6 +101,16 @@ class ContractData(BaseModel):
     contract_end_date: Optional[str] = None
     contract_type: Optional[str] = None
     confidence_scores: Dict[str, float] = {}
+    
+    # Enhanced fields
+    key_value_pairs: List[KeyValuePair] = []
+    document_metadata: Optional[DocumentMetadata] = None
+    extracted_text: Optional[str] = None
+    processing_notes: List[str] = []
+    risk_factors: List[str] = []
+    compliance_issues: List[str] = []
+    important_dates: List[Dict[str, str]] = []
+    clauses: List[Dict[str, Any]] = []
 
 class Contract(BaseModel):
     id: str

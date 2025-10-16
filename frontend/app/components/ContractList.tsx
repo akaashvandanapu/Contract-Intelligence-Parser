@@ -1,9 +1,11 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Eye, Download, RefreshCw, Clock, CheckCircle, XCircle, AlertCircle } from 'lucide-react'
+import { Eye, Download, RefreshCw, Clock, CheckCircle, XCircle, AlertCircle, Search, Filter, BarChart3, Star, Calendar, DollarSign, FileText } from 'lucide-react'
 import toast from 'react-hot-toast'
 import axios from 'axios'
+import { motion } from 'framer-motion'
+import { format } from 'date-fns'
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'
 
@@ -137,87 +139,170 @@ export default function ContractList({ contracts, loading, onContractSelect, onR
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <h2 className="text-xl font-semibold text-gray-900">
-          Contracts ({contracts.length})
-        </h2>
-        <button
-          onClick={onRefresh}
-          className="btn-secondary flex items-center"
-        >
-          <RefreshCw className="w-4 h-4 mr-2" />
-          Refresh
-        </button>
+    <motion.div 
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5 }}
+      className="space-y-8"
+    >
+      {/* Enhanced Header */}
+      <div className="bg-gradient-to-r from-indigo-50 to-blue-50 rounded-xl p-6 border border-indigo-100">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            <div className="p-3 bg-indigo-100 rounded-lg">
+              <FileText className="w-8 h-8 text-indigo-600" />
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900">Contract Intelligence Dashboard</h2>
+              <p className="text-gray-600 mt-1">Manage and analyze your contract portfolio</p>
+            </div>
+          </div>
+          <motion.button 
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={onRefresh}
+            className="flex items-center px-4 py-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors shadow-sm"
+          >
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Refresh
+          </motion.button>
+        </div>
+        
+        {/* Stats Overview */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-6">
+          <div className="bg-white rounded-lg p-4 border border-gray-100">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-500">Total Contracts</p>
+                <p className="text-2xl font-bold text-gray-900">{contracts.length}</p>
+              </div>
+              <BarChart3 className="w-8 h-8 text-blue-600" />
+            </div>
+          </div>
+          
+          <div className="bg-white rounded-lg p-4 border border-gray-100">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-500">Completed</p>
+                <p className="text-2xl font-bold text-green-600">
+                  {contracts.filter(c => c.status === 'completed').length}
+                </p>
+              </div>
+              <CheckCircle className="w-8 h-8 text-green-600" />
+            </div>
+          </div>
+          
+          <div className="bg-white rounded-lg p-4 border border-gray-100">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-500">Processing</p>
+                <p className="text-2xl font-bold text-yellow-600">
+                  {contracts.filter(c => c.status === 'processing').length}
+                </p>
+              </div>
+              <Clock className="w-8 h-8 text-yellow-600" />
+            </div>
+          </div>
+          
+          <div className="bg-white rounded-lg p-4 border border-gray-100">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-500">Failed</p>
+                <p className="text-2xl font-bold text-red-600">
+                  {contracts.filter(c => c.status === 'failed').length}
+                </p>
+              </div>
+              <XCircle className="w-8 h-8 text-red-600" />
+            </div>
+          </div>
+        </div>
       </div>
 
-      <div className="bg-white shadow overflow-hidden sm:rounded-md">
-        <ul className="divide-y divide-gray-200">
-          {contracts.map((contract) => (
-            <li key={contract.id} className="px-6 py-4 hover:bg-gray-50">
+      {/* Enhanced Contract List */}
+      <div className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
+          <h3 className="text-lg font-semibold text-gray-900">Contract Portfolio</h3>
+          <p className="text-sm text-gray-500">Click on any contract to view detailed analysis</p>
+        </div>
+        <div className="divide-y divide-gray-200">
+          {contracts.map((contract, index) => (
+            <motion.div
+              key={contract.id}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: index * 0.1 }}
+              className="px-6 py-6 hover:bg-gray-50 transition-colors cursor-pointer"
+              onClick={() => onSelectContract(contract.id)}
+            >
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-4">
                   <div className="flex-shrink-0">
-                    {getStatusIcon(contract.status)}
+                    <div className="p-2 bg-blue-100 rounded-lg">
+                      <FileText className="w-6 h-6 text-blue-600" />
+                    </div>
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center space-x-2">
-                      <p className="text-sm font-medium text-gray-900 truncate">
+                    <div className="flex items-center space-x-3">
+                      <h4 className="text-lg font-semibold text-gray-900 truncate">
                         {contract.filename}
-                      </p>
+                      </h4>
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(contract.status)}`}>
                         {contract.status}
                       </span>
-                    </div>
-                    <div className="flex items-center space-x-4 mt-1">
-                      <p className="text-sm text-gray-500">
-                        {formatFileSize(contract.file_size)}
-                      </p>
-                      <p className="text-sm text-gray-500">
-                        {formatDate(contract.uploaded_at)}
-                      </p>
-                      {contract.status === 'completed' && contract.score > 0 && (
-                        <p className={`text-sm font-medium ${getScoreColor(contract.score)}`}>
-                          Score: {contract.score}%
-                        </p>
+                      {contract.score && (
+                        <div className="flex items-center space-x-1">
+                          <Star className="w-4 h-4 text-yellow-500" />
+                          <span className="text-sm font-medium text-gray-900">{contract.score}%</span>
+                        </div>
                       )}
                     </div>
-                    {contract.status === 'processing' && contract.progress > 0 && (
-                      <div className="mt-2">
-                        <div className="w-full bg-gray-200 rounded-full h-1.5">
-                          <div
-                            className="bg-blue-600 h-1.5 rounded-full transition-all duration-300"
-                            style={{ width: `${contract.progress}%` }}
-                          ></div>
-                        </div>
-                        <p className="text-xs text-gray-500 mt-1">{contract.progress}% complete</p>
+                    <div className="flex items-center space-x-4 mt-2 text-sm text-gray-500">
+                      <div className="flex items-center">
+                        <Calendar className="w-4 h-4 mr-1" />
+                        {format(new Date(contract.uploaded_at), 'MMM dd, yyyy')}
                       </div>
-                    )}
+                      <div className="flex items-center">
+                        <Clock className="w-4 h-4 mr-1" />
+                        {format(new Date(contract.uploaded_at), 'HH:mm')}
+                      </div>
+                      {contract.extracted_data?.financial_details?.total_contract_value && (
+                        <div className="flex items-center">
+                          <DollarSign className="w-4 h-4 mr-1" />
+                          ${contract.extracted_data.financial_details.total_contract_value.toLocaleString()}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
                 <div className="flex items-center space-x-2">
-                  {contract.status === 'completed' && (
-                    <button
-                      onClick={() => onContractSelect(contract)}
-                      className="btn-primary flex items-center text-sm"
-                    >
-                      <Eye className="w-4 h-4 mr-1" />
-                      View
-                    </button>
-                  )}
-                  <button
-                    onClick={() => handleDownload(contract.id, contract.filename)}
-                    className="btn-secondary flex items-center text-sm"
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onSelectContract(contract.id)
+                    }}
+                    className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                   >
-                    <Download className="w-4 h-4 mr-1" />
-                    Download
-                  </button>
+                    <Eye className="w-5 h-5" />
+                  </motion.button>
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleDownload(contract.id)
+                    }}
+                    className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                  >
+                    <Download className="w-5 h-5" />
+                  </motion.button>
                 </div>
               </div>
-            </li>
+            </motion.div>
           ))}
-        </ul>
+        </div>
       </div>
-    </div>
+    </motion.div>
   )
 }

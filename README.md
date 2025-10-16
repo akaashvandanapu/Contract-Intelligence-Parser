@@ -13,6 +13,7 @@ A comprehensive full-stack application that automatically extracts, analyzes, an
 ## ✨ Features
 
 ### 🔍 **Intelligent Data Extraction**
+
 - **Party Identification** - Automatically extract customer, vendor, and third-party information
 - **Financial Analysis** - Extract contract values, payment terms, and line items
 - **Account Information** - Capture contact details and account numbers
@@ -20,18 +21,21 @@ A comprehensive full-stack application that automatically extracts, analyzes, an
 - **SLA Detection** - Identify service level agreements and performance metrics
 
 ### 📊 **Advanced Scoring System**
+
 - **Weighted Confidence Scoring** - Multi-factor analysis with confidence metrics
 - **Gap Analysis** - Identify missing critical information
 - **Risk Assessment** - Evaluate contract completeness and compliance
 - **Performance Metrics** - Track extraction accuracy and processing efficiency
 
 ### 🎨 **Modern Web Interface**
+
 - **Drag & Drop Upload** - Intuitive PDF file upload interface
 - **Real-time Processing** - Live status updates and progress tracking
 - **Interactive Dashboard** - Comprehensive contract management
 - **Responsive Design** - Works seamlessly on desktop and mobile
 
 ### 🏗️ **Enterprise Architecture**
+
 - **Microservices Design** - Scalable backend with FastAPI
 - **Containerized Deployment** - Docker-based infrastructure
 - **Database Optimization** - MongoDB with proper indexing
@@ -40,6 +44,7 @@ A comprehensive full-stack application that automatically extracts, analyzes, an
 ## 🚀 Quick Start
 
 ### Prerequisites
+
 - Docker & Docker Compose
 - Git
 
@@ -58,6 +63,7 @@ docker-compose ps
 ```
 
 ### Access Points
+
 - **🌐 Web Interface:** http://localhost:3000
 - **🔧 API Documentation:** http://localhost:8000/docs
 - **💚 Health Check:** http://localhost:8000/health
@@ -70,7 +76,7 @@ graph TB
     B --> C[MongoDB Database]
     B --> D[PDF Parser]
     B --> E[Scoring Engine]
-    
+
     F[User Uploads PDF] --> A
     A --> G[Real-time Status]
     B --> H[Data Extraction]
@@ -81,6 +87,7 @@ graph TB
 ## 🛠️ Technology Stack
 
 ### Backend
+
 - **FastAPI** - Modern Python web framework
 - **MongoDB** - NoSQL database with Motor async driver
 - **PyPDF2** - PDF text extraction and parsing
@@ -88,6 +95,7 @@ graph TB
 - **Uvicorn** - ASGI server for production deployment
 
 ### Frontend
+
 - **Next.js 14** - React framework with App Router
 - **TypeScript** - Type-safe development
 - **Tailwind CSS** - Utility-first styling
@@ -95,6 +103,7 @@ graph TB
 - **Axios** - HTTP client for API communication
 
 ### Infrastructure
+
 - **Docker** - Containerization platform
 - **Docker Compose** - Multi-container orchestration
 - **MongoDB 7.0** - Latest database version
@@ -102,15 +111,15 @@ graph TB
 
 ## 📋 API Endpoints
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/` | API information and available endpoints |
-| `GET` | `/health` | System health check |
-| `POST` | `/contracts/upload` | Upload PDF contract for processing |
-| `GET` | `/contracts/{id}/status` | Get processing status and progress |
-| `GET` | `/contracts/{id}` | Retrieve extracted contract data |
-| `GET` | `/contracts` | List all processed contracts |
-| `GET` | `/contracts/{id}/download` | Download original PDF file |
+| Method | Endpoint                   | Description                             |
+| ------ | -------------------------- | --------------------------------------- |
+| `GET`  | `/`                        | API information and available endpoints |
+| `GET`  | `/health`                  | System health check                     |
+| `POST` | `/contracts/upload`        | Upload PDF contract for processing      |
+| `GET`  | `/contracts/{id}/status`   | Get processing status and progress      |
+| `GET`  | `/contracts/{id}`          | Retrieve extracted contract data        |
+| `GET`  | `/contracts`               | List all processed contracts            |
+| `GET`  | `/contracts/{id}/download` | Download original PDF file              |
 
 ## 🧪 Testing
 
@@ -149,15 +158,16 @@ NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
 
 ### Docker Services
 
-| Service | Port | Description |
-|---------|------|-------------|
-| Frontend | 3000 | Next.js web application |
-| Backend | 8000 | FastAPI REST API |
-| MongoDB | 27017 | Database server |
+| Service  | Port  | Description             |
+| -------- | ----- | ----------------------- |
+| Frontend | 3000  | Next.js web application |
+| Backend  | 8000  | FastAPI REST API        |
+| MongoDB  | 27017 | Database server         |
 
 ## 📈 Usage Examples
 
 ### Upload a Contract
+
 ```bash
 curl -X POST "http://localhost:8000/contracts/upload" \
   -H "Content-Type: multipart/form-data" \
@@ -165,11 +175,13 @@ curl -X POST "http://localhost:8000/contracts/upload" \
 ```
 
 ### Check Processing Status
+
 ```bash
 curl "http://localhost:8000/contracts/{contract_id}/status"
 ```
 
 ### Retrieve Extracted Data
+
 ```bash
 curl "http://localhost:8000/contracts/{contract_id}"
 ```

@@ -1,9 +1,11 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { ArrowLeft, Download, AlertTriangle, CheckCircle, XCircle, Users, DollarSign, CreditCard, TrendingUp, Phone } from 'lucide-react'
+import { ArrowLeft, Download, AlertTriangle, CheckCircle, XCircle, Users, DollarSign, CreditCard, TrendingUp, Phone, Calendar, FileText, Shield, Target, BarChart3, Clock, Star, Eye, Search, Filter } from 'lucide-react'
 import toast from 'react-hot-toast'
 import axios from 'axios'
+import { motion } from 'framer-motion'
+import { format } from 'date-fns'
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'
 
@@ -164,6 +166,12 @@ export default function ContractDetail({ contract, onBack }: ContractDetailProps
     return 'text-red-600'
   }
 
+  const renderConfidenceScore = (score: number) => {
+    const percentage = Math.round(score)
+    const color = score >= 80 ? 'text-green-600' : score >= 60 ? 'text-yellow-600' : 'text-red-600'
+    return `${percentage}% confidence`
+  }
+
   if (loading) {
     return (
       <div className="flex justify-center items-center py-12">
@@ -188,30 +196,63 @@ export default function ContractDetail({ contract, onBack }: ContractDetailProps
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-4">
-          <button onClick={onBack} className="btn-secondary">
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Back
-          </button>
-          <div>
-            <h2 className="text-xl font-semibold text-gray-900">{contract.filename}</h2>
-            <div className="flex items-center space-x-4 mt-1">
-              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getScoreColor(contract.score)}`}>
-                Overall Score: {contract.score}%
-              </span>
-              <span className="text-sm text-gray-500">
-                {new Date(contract.uploaded_at).toLocaleDateString()}
-              </span>
+    <motion.div 
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5 }}
+      className="space-y-8"
+    >
+      {/* Enhanced Header */}
+      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-6 border border-blue-100">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            <motion.button 
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={onBack} 
+              className="flex items-center px-4 py-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors shadow-sm"
+            >
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Back to List
+            </motion.button>
+            <div className="flex items-center space-x-3">
+              <div className="p-2 bg-blue-100 rounded-lg">
+                <FileText className="w-6 h-6 text-blue-600" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900">{contract.filename}</h2>
+                <div className="flex items-center space-x-4 mt-2">
+                  <motion.div
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={{ delay: 0.2 }}
+                    className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getScoreColor(contract.score)}`}
+                  >
+                    <Star className="w-4 h-4 mr-1" />
+                    Overall Score: {contract.score}%
+                  </motion.div>
+                  <div className="flex items-center text-sm text-gray-500">
+                    <Calendar className="w-4 h-4 mr-1" />
+                    {format(new Date(contract.uploaded_at), 'MMM dd, yyyy')}
+                  </div>
+                  <div className="flex items-center text-sm text-gray-500">
+                    <Clock className="w-4 h-4 mr-1" />
+                    {format(new Date(contract.uploaded_at), 'HH:mm')}
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
+          <motion.button 
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={handleDownload} 
+            className="flex items-center px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-lg"
+          >
+            <Download className="w-5 h-5 mr-2" />
+            Download PDF
+          </motion.button>
         </div>
-        <button onClick={handleDownload} className="btn-primary">
-          <Download className="w-4 h-4 mr-2" />
-          Download
-        </button>
       </div>
 
       {/* Gaps Section */}
@@ -234,49 +275,248 @@ export default function ContractDetail({ contract, onBack }: ContractDetailProps
         </div>
       )}
 
-      {/* Contract Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="card">
-          <div className="flex items-center">
-            <div className="p-2 bg-blue-100 rounded-lg">
-              <Users className="w-6 h-6 text-blue-600" />
+      {/* Enhanced Contract Overview */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="bg-white rounded-xl p-6 shadow-lg border border-gray-100 hover:shadow-xl transition-shadow"
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-500 mb-1">Parties Identified</p>
+              <p className="text-3xl font-bold text-gray-900">{contractData.parties?.length || 0}</p>
+              <p className="text-xs text-gray-400 mt-1">
+                {renderConfidenceScore(contractData.confidence_scores?.party_identification || 0)}
+              </p>
             </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-500">Parties</p>
-              <p className="text-2xl font-semibold text-gray-900">{contractData.parties?.length || 0}</p>
+            <div className="p-3 bg-blue-100 rounded-lg">
+              <Users className="w-8 h-8 text-blue-600" />
             </div>
           </div>
-        </div>
+        </motion.div>
 
-        <div className="card">
-          <div className="flex items-center">
-            <div className="p-2 bg-green-100 rounded-lg">
-              <DollarSign className="w-6 h-6 text-green-600" />
-            </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-500">Contract Value</p>
-              <p className="text-2xl font-semibold text-gray-900">
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="bg-white rounded-xl p-6 shadow-lg border border-gray-100 hover:shadow-xl transition-shadow"
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-500 mb-1">Contract Value</p>
+              <p className="text-3xl font-bold text-gray-900">
                 {contractData.financial_details?.total_contract_value 
                   ? `$${contractData.financial_details.total_contract_value.toLocaleString()}`
                   : 'N/A'
                 }
               </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="card">
-          <div className="flex items-center">
-            <div className="p-2 bg-purple-100 rounded-lg">
-              <TrendingUp className="w-6 h-6 text-purple-600" />
-            </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-500">Payment Type</p>
-              <p className="text-2xl font-semibold text-gray-900">
-                {contractData.revenue_classification?.payment_type || 'N/A'}
+              <p className="text-xs text-gray-400 mt-1">
+                {renderConfidenceScore(contractData.confidence_scores?.financial_details || 0)}
               </p>
             </div>
+            <div className="p-3 bg-green-100 rounded-lg">
+              <DollarSign className="w-8 h-8 text-green-600" />
+            </div>
           </div>
+        </motion.div>
+
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          className="bg-white rounded-xl p-6 shadow-lg border border-gray-100 hover:shadow-xl transition-shadow"
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-500 mb-1">Payment Type</p>
+              <p className="text-3xl font-bold text-gray-900">
+                {contractData.revenue_classification?.payment_type || 'N/A'}
+              </p>
+              <p className="text-xs text-gray-400 mt-1">
+                {renderConfidenceScore(contractData.confidence_scores?.revenue_classification || 0)}
+              </p>
+            </div>
+            <div className="p-3 bg-purple-100 rounded-lg">
+              <TrendingUp className="w-8 h-8 text-purple-600" />
+            </div>
+          </div>
+        </motion.div>
+
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.4 }}
+          className="bg-white rounded-xl p-6 shadow-lg border border-gray-100 hover:shadow-xl transition-shadow"
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-500 mb-1">Risk Level</p>
+              <p className="text-3xl font-bold text-gray-900">
+                {contractData.risk_factors?.length > 0 ? 'High' : 'Low'}
+              </p>
+              <p className="text-xs text-gray-400 mt-1">
+                {contractData.risk_factors?.length || 0} factors
+              </p>
+            </div>
+            <div className="p-3 bg-red-100 rounded-lg">
+              <Shield className="w-8 h-8 text-red-600" />
+            </div>
+          </div>
+        </motion.div>
+      </div>
+
+      {/* Enhanced Information Tabs */}
+      <div className="bg-white rounded-xl shadow-lg border border-gray-100">
+        <div className="border-b border-gray-200">
+          <nav className="flex space-x-8 px-6" aria-label="Tabs">
+            {['Overview', 'Parties', 'Financial', 'Terms', 'Risk Analysis', 'Metadata'].map((tab) => (
+              <button
+                key={tab}
+                className="py-4 px-1 border-b-2 border-transparent text-sm font-medium text-gray-500 hover:text-gray-700 hover:border-gray-300"
+              >
+                {tab}
+              </button>
+            ))}
+          </nav>
+        </div>
+        
+        <div className="p-6">
+          {/* Key-Value Pairs Section */}
+          {contractData.key_value_pairs && contractData.key_value_pairs.length > 0 && (
+            <div className="mb-8">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                <Target className="w-5 h-5 mr-2 text-blue-600" />
+                Extracted Key-Value Pairs
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {contractData.key_value_pairs.map((pair, index) => (
+                  <motion.div
+                    key={index}
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: index * 0.1 }}
+                    className="bg-gray-50 rounded-lg p-4 border border-gray-200"
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-medium text-gray-900">{pair.key}</span>
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                        pair.confidence > 0.8 ? 'bg-green-100 text-green-800' :
+                        pair.confidence > 0.6 ? 'bg-yellow-100 text-yellow-800' :
+                        'bg-red-100 text-red-800'
+                      }`}>
+                        {Math.round(pair.confidence * 100)}% confidence
+                      </span>
+                    </div>
+                    <p className="text-gray-700">{pair.value}</p>
+                    <span className="text-xs text-gray-500 capitalize">{pair.field_type}</span>
+                  </motion.div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Risk Analysis Section */}
+          {contractData.risk_factors && contractData.risk_factors.length > 0 && (
+            <div className="mb-8">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                <AlertTriangle className="w-5 h-5 mr-2 text-red-600" />
+                Risk Factors Identified
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {contractData.risk_factors.map((risk, index) => (
+                  <motion.div
+                    key={index}
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: index * 0.1 }}
+                    className="bg-red-50 border border-red-200 rounded-lg p-3 flex items-center"
+                  >
+                    <AlertTriangle className="w-4 h-4 text-red-600 mr-3 flex-shrink-0" />
+                    <span className="text-red-800 font-medium capitalize">{risk}</span>
+                  </motion.div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Compliance Issues Section */}
+          {contractData.compliance_issues && contractData.compliance_issues.length > 0 && (
+            <div className="mb-8">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                <Shield className="w-5 h-5 mr-2 text-orange-600" />
+                Compliance Issues
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {contractData.compliance_issues.map((issue, index) => (
+                  <motion.div
+                    key={index}
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: index * 0.1 }}
+                    className="bg-orange-50 border border-orange-200 rounded-lg p-3 flex items-center"
+                  >
+                    <Shield className="w-4 h-4 text-orange-600 mr-3 flex-shrink-0" />
+                    <span className="text-orange-800 font-medium capitalize">{issue}</span>
+                  </motion.div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Important Dates Section */}
+          {contractData.important_dates && contractData.important_dates.length > 0 && (
+            <div className="mb-8">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                <Calendar className="w-5 h-5 mr-2 text-blue-600" />
+                Important Dates
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {contractData.important_dates.map((date, index) => (
+                  <motion.div
+                    key={index}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: index * 0.1 }}
+                    className="bg-blue-50 border border-blue-200 rounded-lg p-4"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-medium text-blue-900 capitalize">{date.description}</p>
+                        <p className="text-blue-700">{date.date}</p>
+                      </div>
+                      <Calendar className="w-5 h-5 text-blue-600" />
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Processing Notes Section */}
+          {contractData.processing_notes && contractData.processing_notes.length > 0 && (
+            <div className="mb-8">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                <FileText className="w-5 h-5 mr-2 text-gray-600" />
+                Processing Notes
+              </h3>
+              <div className="space-y-2">
+                {contractData.processing_notes.map((note, index) => (
+                  <motion.div
+                    key={index}
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: index * 0.1 }}
+                    className="bg-gray-50 border border-gray-200 rounded-lg p-3 flex items-start"
+                  >
+                    <div className="w-2 h-2 bg-gray-400 rounded-full mt-2 mr-3 flex-shrink-0"></div>
+                    <span className="text-gray-700">{note}</span>
+                  </motion.div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
