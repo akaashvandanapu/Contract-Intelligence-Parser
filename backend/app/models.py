@@ -1,8 +1,10 @@
-from pydantic import BaseModel, Field, validator
-from typing import List, Optional, Dict, Any, Union
+import re
 from datetime import datetime
 from enum import Enum
-import re
+from typing import Any, Dict, List, Optional, Union
+
+from pydantic import BaseModel, Field, validator
+
 
 class ContractStatus(str, Enum):
     PENDING = "pending"
@@ -111,6 +113,17 @@ class ContractData(BaseModel):
     compliance_issues: List[str] = []
     important_dates: List[Dict[str, str]] = []
     clauses: List[Dict[str, Any]] = []
+    summary: Optional['ContractSummary'] = None
+
+class ContractSummary(BaseModel):
+    overview: str
+    parties_involved: List[str]
+    key_terms: List[str]
+    financial_summary: str
+    contract_duration: str
+    main_obligations: List[str]
+    risk_level: str
+    compliance_status: str
 
 class Contract(BaseModel):
     id: str

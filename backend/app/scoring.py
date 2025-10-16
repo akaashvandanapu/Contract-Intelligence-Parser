@@ -5,22 +5,23 @@ logger = logging.getLogger(__name__)
 
 class ScoringEngine:
     def __init__(self):
-        # Weighted scoring system as per requirements
+        # Weighted scoring system as per assignment requirements
         self.weights = {
-            "financial_completeness": 30,
-            "party_identification": 25,
-            "payment_terms_clarity": 20,
-            "sla_definition": 15,
-            "contact_information": 10
+            "financial_completeness": 30,  # Financial Details
+            "party_identification": 25,     # Party Identification
+            "payment_terms_clarity": 20,   # Payment Structure
+            "sla_definition": 15,          # Service Level Agreements
+            "contact_information": 10      # Account Information
         }
         
-        # Critical fields for gap analysis
+        # Critical fields for gap analysis based on assignment requirements
         self.critical_fields = {
-            "parties": ["name", "role"],
-            "financial_details": ["total_contract_value"],
-            "payment_terms": ["payment_terms"],
-            "account_info": ["contact_email"],
-            "revenue_classification": ["payment_type"]
+            "party_identification": ["contract_parties"],
+            "account_information": ["customer_billing_details", "billing_contact"],
+            "financial_details": ["total_contract_value", "line_items"],
+            "payment_structure": ["payment_terms", "payment_schedule"],
+            "revenue_classification": ["payment_type", "billing_cycle"],
+            "service_level_agreements": ["performance_metrics", "support_terms"]
         }
 
     def calculate_score(self, parsed_data: Dict[str, Any]) -> tuple[float, List[str]]:

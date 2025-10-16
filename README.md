@@ -32,6 +32,7 @@ A comprehensive full-stack application that automatically extracts, analyzes, an
 - **Drag & Drop Upload** - Intuitive PDF file upload interface
 - **Real-time Processing** - Live status updates and progress tracking
 - **Interactive Dashboard** - Comprehensive contract management
+- **Contract Management** - View, download, and delete contracts with confirmation
 - **Responsive Design** - Works seamlessly on desktop and mobile
 
 ### 🏗️ **Enterprise Architecture**
@@ -40,6 +41,14 @@ A comprehensive full-stack application that automatically extracts, analyzes, an
 - **Containerized Deployment** - Docker-based infrastructure
 - **Database Optimization** - MongoDB with proper indexing
 - **API-First Approach** - RESTful endpoints with OpenAPI documentation
+
+### 🗑️ **Contract Management**
+
+- **Safe Deletion** - Delete contracts with confirmation dialog
+- **File Cleanup** - Automatic removal of PDF files from server
+- **Database Sync** - MongoDB Atlas records updated in real-time
+- **Error Handling** - Graceful handling of deletion failures
+- **User Feedback** - Clear success/error notifications
 
 ## 🚀 Quick Start
 
@@ -120,6 +129,7 @@ graph TB
 | `GET`  | `/contracts/{id}`          | Retrieve extracted contract data        |
 | `GET`  | `/contracts`               | List all processed contracts            |
 | `GET`  | `/contracts/{id}/download` | Download original PDF file              |
+| `DELETE` | `/contracts/{id}`          | Delete contract and associated files    |
 
 ## 🧪 Testing
 

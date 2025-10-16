@@ -1,17 +1,19 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File, Query
+import asyncio
+import logging
+import os
+import uuid
+from datetime import datetime
+from typing import Any, Dict, List, Optional
+
+import aiofiles
+from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from motor.motor_asyncio import AsyncIOMotorClient
-from typing import List, Optional, Dict, Any
-import os
-import uuid
-import asyncio
-from datetime import datetime
-import aiofiles
-from .models import Contract, ContractStatus, ContractData
+
+from .models import Contract, ContractData, ContractStatus
 from .parser import ContractParser
 from .scoring import ScoringEngine
-import logging
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -35,8 +37,27 @@ scoring_engine = ScoringEngine()
 @app.on_event("startup")
 async def startup_db_client():
     """Initialize database connection on startup"""
-    app.mongodb_client = AsyncIOMotorClient(os.getenv("MONGODB_URL", "mongodb://localhost:27017"))
-    app.mongodb = app.mongodb_client.contract_intelligence
+    mongodb_url = os.getenv("MONGODB_URL", "mongodb://localhost:27017")
+    logger.info(f"Connecting to MongoDB: {mongodb_url[:50]}...")
+    
+    try:
+        app.mongodb_client = AsyncIOMotorClient(
+            mongodb_url,
+            serverSelectionTimeoutMS=5000,
+            connectTimeoutMS=10000,
+            socketTimeoutMS=10000,
+            maxPoolSize=10,
+            retryWrites=True
+        )
+        app.mongodb = app.mongodb_client.contract_intelligence
+        
+        # Test the connection
+        await app.mongodb_client.admin.command('ping')
+        logger.info("Successfully connected to MongoDB")
+        
+    except Exception as e:
+        logger.error(f"Failed to connect to MongoDB: {str(e)}")
+        raise
     
     # Create indexes
     try:
@@ -60,8 +81,26 @@ async def upload_contract(file: UploadFile = File(...)):
     """Upload a contract file and initiate background processing"""
     try:
         # Validate file type
-        if not file.filename.lower().endswith('.pdf'):
+        if not file.filename or not file.filename.lower().endswith('.pdf'):
             raise HTTPException(status_code=400, detail="Only PDF files are supported")
+        
+        # Read content for validation
+        content = await file.read()
+        
+        # Validate file size (50MB limit)
+        if len(content) > 50 * 1024 * 1024:  # 50MB
+            raise HTTPException(status_code=400, detail="File size exceeds 50MB limit")
+        
+        # Validate PDF header
+        if not content.startswith(b'%PDF'):
+            raise HTTPException(status_code=400, detail="Invalid PDF file format")
+        
+        # Check for malicious content patterns
+        suspicious_patterns = [b'<script', b'javascript:', b'vbscript:', b'<iframe']
+        content_lower = content.lower()
+        for pattern in suspicious_patterns:
+            if pattern in content_lower:
+                raise HTTPException(status_code=400, detail="File contains potentially malicious content")
         
         # Generate unique contract ID
         contract_id = str(uuid.uuid4())
@@ -73,7 +112,6 @@ async def upload_contract(file: UploadFile = File(...)):
         # Save file
         file_path = os.path.join(uploads_dir, f"{contract_id}.pdf")
         async with aiofiles.open(file_path, 'wb') as f:
-            content = await file.read()
             await f.write(content)
         
         # Create contract record in database
@@ -212,6 +250,45 @@ async def download_contract(contract_id: str):
         logger.error(f"Error downloading contract: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error downloading contract: {str(e)}")
 
+@app.delete("/contracts/{contract_id}")
+async def delete_contract(contract_id: str):
+    """Delete a contract and its associated files"""
+    try:
+        # Get contract from database
+        contract = await app.mongodb.contracts.find_one({"id": contract_id})
+        
+        if not contract:
+            raise HTTPException(status_code=404, detail="Contract not found")
+        
+        # Delete the contract file if it exists
+        file_path = contract.get("file_path")
+        if file_path and os.path.exists(file_path):
+            try:
+                os.remove(file_path)
+                logger.info(f"Deleted contract file: {file_path}")
+            except Exception as e:
+                logger.warning(f"Could not delete contract file {file_path}: {str(e)}")
+        
+        # Delete from MongoDB Atlas
+        result = await app.mongodb.contracts.delete_one({"id": contract_id})
+        
+        if result.deleted_count == 0:
+            raise HTTPException(status_code=404, detail="Contract not found in database")
+        
+        logger.info(f"Successfully deleted contract {contract_id} from database")
+        
+        return {
+            "message": "Contract deleted successfully",
+            "contract_id": contract_id,
+            "filename": contract.get("filename", "unknown")
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting contract: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error deleting contract: {str(e)}")
+
 async def process_contract(contract_id: str):
     """Background task to process a contract"""
     try:
@@ -247,7 +324,11 @@ async def process_contract(contract_id: str):
             {"$set": {"progress": 80, "updated_at": datetime.utcnow()}}
         )
         
-        score, gaps = scoring_engine.calculate_score(parsed_data)
+        # Convert ContractData to dict for scoring
+        parsed_data_dict = parsed_data.dict() if hasattr(parsed_data, 'dict') else parsed_data
+        logger.info(f"Scoring data: {type(parsed_data)}")
+        score, gaps = scoring_engine.calculate_score(parsed_data_dict)
+        logger.info(f"Calculated score: {score}, Gaps: {len(gaps)}")
         
         # Update contract with results
         await app.mongodb.contracts.update_one(
@@ -256,7 +337,7 @@ async def process_contract(contract_id: str):
                 "$set": {
                     "status": ContractStatus.COMPLETED,
                     "progress": 100,
-                    "parsed_data": parsed_data,
+                    "parsed_data": parsed_data.dict() if hasattr(parsed_data, 'dict') else parsed_data,
                     "score": score,
                     "gaps": gaps,
                     "updated_at": datetime.utcnow()
@@ -268,17 +349,42 @@ async def process_contract(contract_id: str):
     
     except Exception as e:
         logger.error(f"Error processing contract {contract_id}: {str(e)}")
-        # Update status to failed
-        await app.mongodb.contracts.update_one(
-            {"id": contract_id},
-            {
-                "$set": {
-                    "status": ContractStatus.FAILED,
-                    "error": str(e),
-                    "updated_at": datetime.utcnow()
+        
+        # Check if this is a retryable error and attempt retry
+        retry_count = contract.get("retry_count", 0)
+        max_retries = 3
+        
+        if retry_count < max_retries and "timeout" in str(e).lower():
+            # Retry for timeout errors
+            await app.mongodb.contracts.update_one(
+                {"id": contract_id},
+                {
+                    "$set": {
+                        "status": ContractStatus.PENDING,
+                        "progress": 0,
+                        "retry_count": retry_count + 1,
+                        "last_error": str(e),
+                        "updated_at": datetime.utcnow()
+                    }
                 }
-            }
-        )
+            )
+            logger.info(f"Retrying contract {contract_id} (attempt {retry_count + 1}/{max_retries})")
+            # Schedule retry after 30 seconds
+            await asyncio.sleep(30)
+            await process_contract(contract_id)
+        else:
+            # Update status to failed
+            await app.mongodb.contracts.update_one(
+                {"id": contract_id},
+                {
+                    "$set": {
+                        "status": ContractStatus.FAILED,
+                        "error": str(e),
+                        "retry_count": retry_count,
+                        "updated_at": datetime.utcnow()
+                    }
+                }
+            )
 
 @app.get("/")
 async def root():

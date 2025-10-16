@@ -1,27 +1,43 @@
-import pdfplumber
 import fitz  # PyMuPDF
+import pdfplumber
 import pytesseract
 from pdf2image import convert_from_path
-import cv2
-import numpy as np
-from PIL import Image
-import re
-import spacy
-import pandas as pd
-from typing import Dict, List, Optional, Any, Tuple
-from datetime import datetime
-import dateparser
-import phonenumbers
-from email_validator import validate_email, EmailNotValidError
-from fuzzywuzzy import fuzz
+
+try:
+    import cv2
+    import numpy as np
+    from PIL import Image
+    OPENCV_AVAILABLE = True
+except ImportError:
+    OPENCV_AVAILABLE = False
+    cv2 = None
+    np = None
+    Image = None
 import logging
-from .models import ContractData, Party, KeyValuePair, DocumentMetadata, FinancialDetails, PaymentTerms, RevenueClassification, SLA, AccountInfo
+import re
+from datetime import datetime
+from typing import Any, Dict, List, Optional, Tuple
+
+import dateparser
+import pandas as pd
+import phonenumbers
+import spacy
+from email_validator import EmailNotValidError, validate_email
+from fuzzywuzzy import fuzz
+
+from .gemini_analyzer import GeminiContractAnalyzer
+from .manual_parser import ManualContractParser
+from .models import (SLA, AccountInfo, ContractData, ContractSummary,
+                     DocumentMetadata, FinancialDetails, KeyValuePair, Party,
+                     PaymentTerms, RevenueClassification)
 
 logger = logging.getLogger(__name__)
 
 class EnhancedContractParser:
     def __init__(self):
         self.nlp = None
+        self.gemini_analyzer = GeminiContractAnalyzer()
+        self.manual_parser = ManualContractParser()
         self._load_nlp_model()
         self.patterns = self._initialize_patterns()
         
@@ -31,6 +47,9 @@ class EnhancedContractParser:
             self.nlp = spacy.load("en_core_web_sm")
         except OSError:
             logger.warning("spaCy model not found. Install with: python -m spacy download en_core_web_sm")
+            self.nlp = None
+        except Exception as e:
+            logger.warning(f"spaCy initialization failed: {e}")
             self.nlp = None
     
     def _initialize_patterns(self):
@@ -63,42 +82,50 @@ class EnhancedContractParser:
         }
     
     async def parse_contract(self, file_path: str) -> ContractData:
-        """Enhanced contract parsing with OCR and advanced extraction"""
+        """Enhanced contract parsing with Gemini AI and advanced extraction"""
         try:
             # Extract text using multiple methods
             text_content = await self._extract_text_enhanced(file_path)
             
-            # Extract metadata
+            # Use Gemini AI for comprehensive analysis
+            try:
+                ai_analysis = await self.gemini_analyzer.analyze_contract(text_content, file_path)
+                
+                # Convert AI analysis to our data models
+                parties = self._convert_ai_parties(ai_analysis.get("parties", []))
+                financial_details = self._convert_ai_financial(ai_analysis.get("financial_details", {}))
+                payment_terms = self._convert_ai_payment_terms(ai_analysis.get("payment_terms", {}))
+                revenue_classification = self._convert_ai_revenue(ai_analysis.get("revenue_classification", {}))
+                sla = self._convert_ai_sla(ai_analysis.get("sla", {}))
+                account_info = self._convert_ai_account_info(ai_analysis.get("parties", []))
+                
+            except Exception as e:
+                logger.error(f"Gemini AI analysis failed: {str(e)}")
+                # Fallback to improved manual parsing
+                return self._parse_contract_manual_improved(text_content, file_path)
+            
+            # Extract additional data using traditional methods
             metadata = await self._extract_metadata(file_path)
-            
-            # Extract key-value pairs
             key_value_pairs = await self._extract_key_value_pairs(text_content)
-            
-            # Extract structured data
-            parties = await self._extract_parties_enhanced(text_content)
-            financial_details = await self._extract_financial_details_enhanced(text_content)
-            payment_terms = await self._extract_payment_terms_enhanced(text_content)
-            revenue_classification = await self._extract_revenue_classification_enhanced(text_content)
-            sla = await self._extract_sla_enhanced(text_content)
-            account_info = await self._extract_account_info_enhanced(text_content)
-            
-            # Extract dates and clauses
             important_dates = await self._extract_important_dates(text_content)
             clauses = await self._extract_clauses(text_content)
             
-            # Risk and compliance analysis
-            risk_factors = await self._analyze_risk_factors(text_content)
-            compliance_issues = await self._analyze_compliance_issues(text_content)
+            # Risk and compliance analysis from AI
+            risk_factors = ai_analysis.get("risk_factors", [])
+            compliance_issues = ai_analysis.get("compliance_issues", [])
             
-            # Calculate confidence scores
-            confidence_scores = await self._calculate_enhanced_confidence_scores(
-                parties, financial_details, payment_terms, revenue_classification, sla, account_info
-            )
+            # Calculate confidence scores from AI
+            confidence_scores = ai_analysis.get("confidence_scores", {})
             
-            # Processing notes
-            processing_notes = await self._generate_processing_notes(
-                text_content, metadata, key_value_pairs
-            )
+            # Create processing notes
+            processing_notes = [
+                "AI-powered analysis completed using Gemini",
+                f"Extracted {len(parties)} parties",
+                f"Identified {len(key_value_pairs)} key-value pairs"
+            ]
+            
+            # Generate contract summary from AI
+            summary = self._convert_ai_summary(ai_analysis.get("summary", {}))
             
             return ContractData(
                 parties=parties,
@@ -109,7 +136,7 @@ class EnhancedContractParser:
                 sla=sla,
                 contract_start_date=important_dates.get('start_date'),
                 contract_end_date=important_dates.get('end_date'),
-                contract_type=await self._classify_contract_type(text_content),
+                contract_type=ai_analysis.get("contract_type", "Unknown"),
                 confidence_scores=confidence_scores,
                 key_value_pairs=key_value_pairs,
                 document_metadata=metadata,
@@ -118,12 +145,178 @@ class EnhancedContractParser:
                 risk_factors=risk_factors,
                 compliance_issues=compliance_issues,
                 important_dates=[{"date": k, "description": v} for k, v in important_dates.items()],
-                clauses=clauses
+                clauses=clauses,
+                summary=summary
             )
             
         except Exception as e:
             logger.error(f"Error in enhanced contract parsing: {str(e)}")
             raise
+    
+    def _parse_contract_manual_improved(self, text_content: str, file_path: str) -> ContractData:
+        """Improved manual contract parsing using the new manual parser"""
+        try:
+            # Use the manual parser
+            manual_result = self.manual_parser.parse_contract_text(text_content)
+            
+            # Convert manual result to our data models
+            parties = self._convert_manual_parties(manual_result.get("parties", []))
+            account_info = self._convert_manual_account_info(manual_result.get("account_info", {}))
+            financial_details = self._convert_manual_financial(manual_result.get("financial_details", {}))
+            payment_terms = self._convert_manual_payment_terms(manual_result.get("payment_terms", {}))
+            revenue_classification = self._convert_manual_revenue(manual_result.get("revenue_classification", {}))
+            sla = self._convert_manual_sla(manual_result.get("sla", {}))
+            summary = self._convert_manual_summary(manual_result.get("summary", {}))
+            
+            # Create ContractData object
+            contract_data = ContractData(
+                parties=parties,
+                account_info=account_info,
+                financial_details=financial_details,
+                payment_terms=payment_terms,
+                revenue_classification=revenue_classification,
+                sla=sla,
+                contract_start_date=manual_result.get("contract_start_date", ""),
+                contract_end_date=manual_result.get("contract_end_date", ""),
+                contract_type=manual_result.get("contract_type", "Unknown"),
+                confidence_scores=manual_result.get("confidence_scores", {}),
+                key_value_pairs=[],
+                risk_factors=manual_result.get("risk_factors", []),
+                compliance_issues=manual_result.get("compliance_issues", []),
+                important_dates=[],
+                processing_notes=["Manual extraction completed"],
+                clauses=[],
+                document_metadata=DocumentMetadata(total_pages=0, file_size=0),
+                summary=summary,
+                extracted_text=text_content
+            )
+            
+            logger.info("Manual contract parsing completed successfully")
+            return contract_data
+            
+        except Exception as e:
+            logger.error(f"Error in manual contract parsing: {str(e)}")
+            # Return basic fallback
+            return ContractData(
+                parties=[],
+                account_info={},
+                financial_details=FinancialDetails(),
+                payment_terms={},
+                revenue_classification={},
+                sla=SLA(),
+                contract_start_date="",
+                contract_end_date="",
+                contract_type="Unknown",
+                confidence_scores={},
+                key_value_pairs=[],
+                risk_factors=[],
+                compliance_issues=[],
+                important_dates=[],
+                processing_notes=["Manual extraction failed"],
+                clauses=[],
+                document_metadata=DocumentMetadata(total_pages=0, file_size=0),
+                summary=ContractSummary(),
+                extracted_text=text_content
+            )
+    
+    def _convert_manual_parties(self, parties_data: List[Dict]) -> List[Party]:
+        """Convert manual parser parties to Party objects"""
+        parties = []
+        for party_data in parties_data:
+            try:
+                party = Party(
+                    name=party_data.get("name", ""),
+                    role=party_data.get("role", ""),
+                    email=party_data.get("email", ""),
+                    phone=party_data.get("phone", ""),
+                    address=party_data.get("address", ""),
+                    legal_entity=party_data.get("legal_entity", ""),
+                    registration_number=party_data.get("registration_number", ""),
+                    tax_id=party_data.get("tax_id", ""),
+                    website=party_data.get("website", ""),
+                    jurisdiction=party_data.get("jurisdiction", "")
+                )
+                parties.append(party)
+            except Exception as e:
+                logger.error(f"Error converting manual party: {e}")
+                continue
+        return parties
+    
+    def _convert_manual_account_info(self, account_data: Dict) -> Dict:
+        """Convert manual parser account info"""
+        return {
+            "contact_email": account_data.get("contact_email", ""),
+            "account_number": account_data.get("account_number", ""),
+            "billing_address": account_data.get("billing_address", ""),
+            "technical_contact": account_data.get("technical_contact", ""),
+            "account_manager": account_data.get("account_manager", "")
+        }
+    
+    def _convert_manual_financial(self, financial_data: Dict) -> FinancialDetails:
+        """Convert manual parser financial details"""
+        try:
+            return FinancialDetails(
+                total_contract_value=financial_data.get("total_contract_value", 0),
+                currency=financial_data.get("currency", "USD"),
+                line_items=financial_data.get("line_items", []),
+                tax_amount=financial_data.get("tax_amount", 0),
+                additional_fees=financial_data.get("additional_fees", 0)
+            )
+        except Exception as e:
+            logger.error(f"Error converting manual financial details: {e}")
+            return FinancialDetails()
+    
+    def _convert_manual_payment_terms(self, payment_data: Dict) -> Dict:
+        """Convert manual parser payment terms"""
+        return {
+            "payment_terms": payment_data.get("payment_terms", ""),
+            "payment_schedule": payment_data.get("payment_schedule", ""),
+            "due_dates": payment_data.get("due_dates", []),
+            "payment_methods": payment_data.get("payment_methods", []),
+            "banking_details": payment_data.get("banking_details", "")
+        }
+    
+    def _convert_manual_revenue(self, revenue_data: Dict) -> Dict:
+        """Convert manual parser revenue classification"""
+        return {
+            "payment_type": revenue_data.get("payment_type", ""),
+            "billing_cycle": revenue_data.get("billing_cycle", ""),
+            "subscription_model": revenue_data.get("subscription_model", ""),
+            "renewal_terms": revenue_data.get("renewal_terms", ""),
+            "auto_renewal": revenue_data.get("auto_renewal", False)
+        }
+    
+    def _convert_manual_sla(self, sla_data: Dict) -> SLA:
+        """Convert manual parser SLA"""
+        try:
+            return SLA(
+                performance_metrics=sla_data.get("performance_metrics", []),
+                benchmarks=sla_data.get("benchmarks", []),
+                penalty_clauses=sla_data.get("penalty_clauses", []),
+                remedies=sla_data.get("remedies", []),
+                support_terms=sla_data.get("support_terms", ""),
+                maintenance_terms=sla_data.get("maintenance_terms", "")
+            )
+        except Exception as e:
+            logger.error(f"Error converting manual SLA: {e}")
+            return SLA()
+    
+    def _convert_manual_summary(self, summary_data: Dict) -> ContractSummary:
+        """Convert manual parser summary"""
+        try:
+            return ContractSummary(
+                overview=summary_data.get("overview", ""),
+                parties_involved=summary_data.get("parties_involved", []),
+                key_terms=summary_data.get("key_terms", []),
+                financial_summary=summary_data.get("financial_summary", ""),
+                contract_duration=summary_data.get("contract_duration", ""),
+                main_obligations=summary_data.get("main_obligations", []),
+                risk_level=summary_data.get("risk_level", ""),
+                compliance_status=summary_data.get("compliance_status", "")
+            )
+        except Exception as e:
+            logger.error(f"Error converting manual summary: {e}")
+            return ContractSummary()
     
     async def _extract_text_enhanced(self, file_path: str) -> str:
         """Extract text using multiple methods for better coverage"""
@@ -163,6 +356,10 @@ class EnhancedContractParser:
     
     async def _extract_text_with_ocr(self, file_path: str) -> str:
         """Extract text using OCR for scanned documents"""
+        if not OPENCV_AVAILABLE:
+            logger.warning("OpenCV not available, skipping OCR processing")
+            return ""
+            
         try:
             # Convert PDF to images
             images = convert_from_path(file_path, dpi=300)
@@ -182,8 +379,11 @@ class EnhancedContractParser:
             logger.error(f"Error in OCR extraction: {str(e)}")
             return ""
     
-    def _preprocess_image_for_ocr(self, image: np.ndarray) -> np.ndarray:
+    def _preprocess_image_for_ocr(self, image):
         """Preprocess image for better OCR results"""
+        if not OPENCV_AVAILABLE:
+            return image  # Return original image if OpenCV not available
+        
         # Convert to grayscale
         gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
         
@@ -292,6 +492,62 @@ class EnhancedContractParser:
             parties = await self._extract_parties_regex(text)
         
         return parties
+    
+    async def _extract_parties_regex(self, text: str) -> List[Party]:
+        """Extract parties using regex patterns"""
+        parties = []
+        
+        # Common party patterns
+        party_patterns = [
+            r'(?:between|by and between)\s+([A-Z][a-zA-Z\s&,.-]+?)(?:\s+and\s+|\s+&\s+|\s*,|\s+$)',
+            r'(?:client|customer|buyer|purchaser):\s*([A-Z][a-zA-Z\s&,.-]+?)(?:\s*$|\s*,|\s+and)',
+            r'(?:vendor|supplier|seller|provider):\s*([A-Z][a-zA-Z\s&,.-]+?)(?:\s*$|\s*,|\s+and)',
+            r'([A-Z][a-zA-Z\s&,.-]+?)\s+(?:Inc\.|LLC|Corp\.|Corporation|Company|Ltd\.)',
+        ]
+        
+        for pattern in party_patterns:
+            matches = re.finditer(pattern, text, re.IGNORECASE | re.MULTILINE)
+            for match in matches:
+                name = match.group(1).strip()
+                if len(name) > 3 and name not in ['The', 'This', 'That']:
+                    # Try to extract email and phone for this party
+                    email = self._extract_email_for_party(text, name)
+                    phone = self._extract_phone_for_party(text, name)
+                    
+                    party = Party(
+                        name=name,
+                        role="customer",  # Default role
+                        email=email,
+                        phone=phone,
+                        confidence_score=0.7
+                    )
+                    parties.append(party)
+        
+        return parties
+    
+    def _extract_email_for_party(self, text: str, party_name: str) -> Optional[str]:
+        """Extract email associated with a specific party"""
+        try:
+            # Look for email patterns near the party name
+            context = self._extract_context_around_entity(text, party_name, 200)
+            email_pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
+            matches = re.findall(email_pattern, context)
+            return matches[0] if matches else None
+        except:
+            return None
+    
+    def _extract_phone_for_party(self, text: str, party_name: str) -> Optional[str]:
+        """Extract phone associated with a specific party"""
+        try:
+            # Look for phone patterns near the party name
+            context = self._extract_context_around_entity(text, party_name, 200)
+            phone_pattern = r'(?:\+?1[-.\s]?)?\(?([0-9]{3})\)?[-.\s]?([0-9]{3})[-.\s]?([0-9]{4})'
+            matches = re.findall(phone_pattern, context)
+            if matches:
+                return f"({matches[0][0]}) {matches[0][1]}-{matches[0][2]}"
+            return None
+        except:
+            return None
     
     def _extract_context_around_entity(self, text: str, entity: str, window: int) -> str:
         """Extract context around an entity"""
@@ -720,3 +976,388 @@ class EnhancedContractParser:
             notes.append("High confidence data extraction")
         
         return notes
+    
+    async def _generate_contract_summary(
+        self, 
+        text: str, 
+        parties: List[Dict], 
+        financial_details: Optional[Dict], 
+        payment_terms: Optional[Dict],
+        revenue_classification: Optional[Dict],
+        sla: Optional[Dict],
+        risk_factors: List[str],
+        compliance_issues: List[str],
+        important_dates: Dict[str, str]
+    ) -> 'ContractSummary':
+        """Generate a comprehensive contract summary"""
+        try:
+            # Extract party names
+            party_names = [party.get('name', 'Unknown') for party in parties if party.get('name')]
+            
+            # Generate overview
+            overview = await self._generate_overview(text, party_names, financial_details)
+            
+            # Extract key terms
+            key_terms = await self._extract_key_terms(text)
+            
+            # Generate financial summary
+            financial_summary = await self._generate_financial_summary(financial_details)
+            
+            # Calculate contract duration
+            contract_duration = await self._calculate_contract_duration(important_dates)
+            
+            # Extract main obligations
+            main_obligations = await self._extract_main_obligations(text, parties)
+            
+            # Assess risk level
+            risk_level = await self._assess_risk_level(risk_factors, compliance_issues)
+            
+            # Assess compliance status
+            compliance_status = await self._assess_compliance_status(compliance_issues)
+            
+            return ContractSummary(
+                overview=overview,
+                parties_involved=party_names,
+                key_terms=key_terms,
+                financial_summary=financial_summary,
+                contract_duration=contract_duration,
+                main_obligations=main_obligations,
+                risk_level=risk_level,
+                compliance_status=compliance_status
+            )
+            
+        except Exception as e:
+            logger.error(f"Error generating contract summary: {str(e)}")
+            return ContractSummary(
+                overview="Summary generation failed",
+                parties_involved=[],
+                key_terms=[],
+                financial_summary="Unable to generate financial summary",
+                contract_duration="Unknown",
+                main_obligations=[],
+                risk_level="Unknown",
+                compliance_status="Unknown"
+            )
+    
+    async def _generate_overview(self, text: str, party_names: List[str], financial_details: Optional[Dict]) -> str:
+        """Generate a high-level overview of the contract"""
+        try:
+            # Extract contract type and purpose
+            contract_type = await self._classify_contract_type(text)
+            
+            # Get financial value if available
+            financial_value = ""
+            if financial_details and financial_details.get('total_contract_value'):
+                currency = financial_details.get('currency', 'USD')
+                value = financial_details.get('total_contract_value', 0)
+                financial_value = f" valued at {currency} {value:,}"
+            
+            # Create overview
+            parties_text = ", ".join(party_names[:2])  # Limit to first 2 parties
+            if len(party_names) > 2:
+                parties_text += f" and {len(party_names) - 2} other parties"
+            
+            overview = f"This {contract_type} contract involves {parties_text}{financial_value}. "
+            
+            # Add purpose based on contract type
+            if "service" in contract_type.lower():
+                overview += "The contract establishes service delivery terms and performance standards."
+            elif "supply" in contract_type.lower():
+                overview += "The contract governs the supply of goods and delivery terms."
+            elif "license" in contract_type.lower():
+                overview += "The contract grants licensing rights and usage terms."
+            else:
+                overview += "The contract defines the business relationship and terms of engagement."
+            
+            return overview
+            
+        except Exception as e:
+            logger.error(f"Error generating overview: {str(e)}")
+            return "Contract overview could not be generated."
+    
+    async def _extract_key_terms(self, text: str) -> List[str]:
+        """Extract key terms and conditions from the contract"""
+        try:
+            key_terms = []
+            
+            # Common contract terms to look for
+            term_patterns = [
+                r'(?:payment terms?|payment conditions?)[:\s]*([^.\n]+)',
+                r'(?:termination|cancellation)[:\s]*([^.\n]+)',
+                r'(?:liability|indemnification)[:\s]*([^.\n]+)',
+                r'(?:confidentiality|non-disclosure)[:\s]*([^.\n]+)',
+                r'(?:warranty|guarantee)[:\s]*([^.\n]+)',
+                r'(?:force majeure|act of god)[:\s]*([^.\n]+)',
+                r'(?:governing law|jurisdiction)[:\s]*([^.\n]+)',
+                r'(?:dispute resolution|arbitration)[:\s]*([^.\n]+)'
+            ]
+            
+            for pattern in term_patterns:
+                matches = re.findall(pattern, text, re.IGNORECASE)
+                for match in matches:
+                    term = match.strip()
+                    if len(term) > 10 and len(term) < 200:  # Reasonable length
+                        key_terms.append(term)
+            
+            # Remove duplicates and limit to top 8
+            key_terms = list(dict.fromkeys(key_terms))[:8]
+            
+            return key_terms
+            
+        except Exception as e:
+            logger.error(f"Error extracting key terms: {str(e)}")
+            return []
+    
+    async def _generate_financial_summary(self, financial_details: Optional[Dict]) -> str:
+        """Generate a summary of financial aspects"""
+        try:
+            if not financial_details:
+                return "Financial details not available"
+            
+            summary_parts = []
+            
+            # Total value
+            if financial_details.get('total_contract_value'):
+                currency = financial_details.get('currency', 'USD')
+                value = financial_details.get('total_contract_value', 0)
+                summary_parts.append(f"Total contract value: {currency} {value:,}")
+            
+            # Payment type
+            if financial_details.get('line_items'):
+                line_items = financial_details.get('line_items', [])
+                if line_items:
+                    summary_parts.append(f"{len(line_items)} line items identified")
+            
+            # Tax information
+            if financial_details.get('tax_amount'):
+                tax = financial_details.get('tax_amount', 0)
+                summary_parts.append(f"Tax amount: {tax}")
+            
+            return "; ".join(summary_parts) if summary_parts else "Basic financial information available"
+            
+        except Exception as e:
+            logger.error(f"Error generating financial summary: {str(e)}")
+            return "Financial summary unavailable"
+    
+    async def _calculate_contract_duration(self, important_dates: Dict[str, str]) -> str:
+        """Calculate contract duration"""
+        try:
+            start_date = important_dates.get('start_date')
+            end_date = important_dates.get('end_date')
+            
+            if start_date and end_date:
+                try:
+                    from datetime import datetime
+                    start = datetime.strptime(start_date, '%Y-%m-%d')
+                    end = datetime.strptime(end_date, '%Y-%m-%d')
+                    duration = (end - start).days
+                    
+                    if duration < 30:
+                        return f"{duration} days"
+                    elif duration < 365:
+                        months = duration // 30
+                        return f"{months} months"
+                    else:
+                        years = duration // 365
+                        return f"{years} years"
+                except:
+                    return f"From {start_date} to {end_date}"
+            elif start_date:
+                return f"Starting {start_date}"
+            elif end_date:
+                return f"Ending {end_date}"
+            else:
+                return "Duration not specified"
+                
+        except Exception as e:
+            logger.error(f"Error calculating contract duration: {str(e)}")
+            return "Duration unknown"
+    
+    async def _extract_main_obligations(self, text: str, parties: List[Dict]) -> List[str]:
+        """Extract main obligations from the contract"""
+        try:
+            obligations = []
+            
+            # Look for obligation patterns
+            obligation_patterns = [
+                r'(?:shall|must|will|agrees to|undertakes to)[:\s]*([^.\n]+)',
+                r'(?:obligation|responsibility|duty)[:\s]*([^.\n]+)',
+                r'(?:deliver|provide|supply|perform)[:\s]*([^.\n]+)',
+                r'(?:maintain|ensure|guarantee)[:\s]*([^.\n]+)'
+            ]
+            
+            for pattern in obligation_patterns:
+                matches = re.findall(pattern, text, re.IGNORECASE)
+                for match in matches:
+                    obligation = match.strip()
+                    if len(obligation) > 15 and len(obligation) < 150:
+                        obligations.append(obligation)
+            
+            # Remove duplicates and limit to top 5
+            obligations = list(dict.fromkeys(obligations))[:5]
+            
+            return obligations
+            
+        except Exception as e:
+            logger.error(f"Error extracting main obligations: {str(e)}")
+            return []
+    
+    async def _assess_risk_level(self, risk_factors: List[str], compliance_issues: List[str]) -> str:
+        """Assess the overall risk level of the contract"""
+        try:
+            total_issues = len(risk_factors) + len(compliance_issues)
+            
+            if total_issues == 0:
+                return "Low"
+            elif total_issues <= 3:
+                return "Medium"
+            elif total_issues <= 6:
+                return "High"
+            else:
+                return "Very High"
+                
+        except Exception as e:
+            logger.error(f"Error assessing risk level: {str(e)}")
+            return "Unknown"
+    
+    async def _assess_compliance_status(self, compliance_issues: List[str]) -> str:
+        """Assess compliance status"""
+        try:
+            if not compliance_issues:
+                return "Compliant"
+            elif len(compliance_issues) <= 2:
+                return "Minor Issues"
+            elif len(compliance_issues) <= 5:
+                return "Moderate Issues"
+            else:
+                return "Significant Issues"
+                
+        except Exception as e:
+            logger.error(f"Error assessing compliance status: {str(e)}")
+            return "Unknown"
+    
+    def _convert_ai_parties(self, ai_parties: List[Dict]) -> List[Party]:
+        """Convert AI party data to Party objects"""
+        parties = []
+        for party_data in ai_parties:
+            try:
+                party = Party(
+                    name=party_data.get("name", "Unknown"),
+                    role=party_data.get("role", "unknown"),
+                    email=party_data.get("email"),
+                    phone=party_data.get("phone"),
+                    address=party_data.get("address"),
+                    legal_entity=party_data.get("legal_entity"),
+                    registration_number=party_data.get("registration_number")
+                )
+                parties.append(party)
+            except Exception as e:
+                logger.error(f"Error converting AI party data: {str(e)}")
+                continue
+        return parties
+    
+    def _convert_ai_financial(self, ai_financial: Dict) -> Optional[FinancialDetails]:
+        """Convert AI financial data to FinancialDetails object"""
+        try:
+            if not ai_financial:
+                return None
+            
+            return FinancialDetails(
+                total_contract_value=ai_financial.get("total_contract_value", 0),
+                currency=ai_financial.get("currency", "USD"),
+                line_items=ai_financial.get("line_items", []),
+                tax_amount=ai_financial.get("tax_amount", 0),
+                additional_fees=ai_financial.get("additional_fees", 0)
+            )
+        except Exception as e:
+            logger.error(f"Error converting AI financial data: {str(e)}")
+            return None
+    
+    def _convert_ai_payment_terms(self, ai_payment: Dict) -> Optional[PaymentTerms]:
+        """Convert AI payment terms data to PaymentTerms object"""
+        try:
+            if not ai_payment:
+                return None
+            
+            return PaymentTerms(
+                payment_terms=ai_payment.get("payment_terms"),
+                payment_schedule=ai_payment.get("payment_schedule"),
+                due_dates=ai_payment.get("due_dates", []),
+                payment_methods=ai_payment.get("payment_methods", []),
+                banking_details=ai_payment.get("banking_details")
+            )
+        except Exception as e:
+            logger.error(f"Error converting AI payment terms: {str(e)}")
+            return None
+    
+    def _convert_ai_revenue(self, ai_revenue: Dict) -> Optional[RevenueClassification]:
+        """Convert AI revenue data to RevenueClassification object"""
+        try:
+            if not ai_revenue:
+                return None
+            
+            return RevenueClassification(
+                payment_type=ai_revenue.get("payment_type", "unknown"),
+                billing_cycle=ai_revenue.get("billing_cycle"),
+                subscription_model=ai_revenue.get("subscription_model"),
+                auto_renewal=ai_revenue.get("auto_renewal", False)
+            )
+        except Exception as e:
+            logger.error(f"Error converting AI revenue data: {str(e)}")
+            return None
+    
+    def _convert_ai_sla(self, ai_sla: Dict) -> Optional[SLA]:
+        """Convert AI SLA data to SLA object"""
+        try:
+            if not ai_sla:
+                return None
+            
+            return SLA(
+                performance_metrics=ai_sla.get("performance_metrics", []),
+                penalty_clauses=ai_sla.get("penalty_clauses", []),
+                support_terms=ai_sla.get("support_terms"),
+                maintenance_terms=ai_sla.get("maintenance_terms")
+            )
+        except Exception as e:
+            logger.error(f"Error converting AI SLA data: {str(e)}")
+            return None
+    
+    def _convert_ai_account_info(self, ai_parties: List[Dict]) -> Optional[AccountInfo]:
+        """Convert AI party data to AccountInfo object"""
+        try:
+            if not ai_parties:
+                return None
+            
+            # Use the first party as primary contact
+            primary_party = ai_parties[0] if ai_parties else {}
+            
+            return AccountInfo(
+                account_number=primary_party.get("registration_number"),
+                billing_address=primary_party.get("address"),
+                contact_email=primary_party.get("email"),
+                contact_phone=primary_party.get("phone"),
+                technical_support_contact=primary_party.get("email")
+            )
+        except Exception as e:
+            logger.error(f"Error converting AI account info: {str(e)}")
+            return None
+    
+    def _convert_ai_summary(self, ai_summary: Dict) -> Optional[ContractSummary]:
+        """Convert AI summary data to ContractSummary object"""
+        try:
+            if not ai_summary:
+                return None
+            
+            return ContractSummary(
+                overview=ai_summary.get("overview", "Summary not available"),
+                parties_involved=ai_summary.get("parties_involved", []),
+                key_terms=ai_summary.get("key_terms", []),
+                financial_summary=ai_summary.get("financial_summary", "Financial details not available"),
+                contract_duration=ai_summary.get("contract_duration", "Unknown"),
+                main_obligations=ai_summary.get("main_obligations", []),
+                risk_level=ai_summary.get("risk_level", "Unknown"),
+                compliance_status=ai_summary.get("compliance_status", "Unknown")
+            )
+        except Exception as e:
+            logger.error(f"Error converting AI summary: {str(e)}")
+            return None
