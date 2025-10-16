@@ -2,13 +2,21 @@
 
 ## Overview
 
-The Contract Intelligence Parser API is a comprehensive system for automated contract analysis and data extraction. It processes PDF contracts, extracts critical financial and operational data, and provides confidence scores for extracted information.
+The Contract Intelligence Parser API is a comprehensive system for automated contract analysis and data extraction. It processes PDF contracts using advanced RAG (Retrieval-Augmented Generation) techniques, Gemini AI integration, and intelligent scoring systems to extract critical financial and operational data with high accuracy.
 
 ## Base URL
 
 ```
 http://localhost:8000
 ```
+
+## Key Features
+
+- **RAG-Based Parsing** - Advanced Retrieval-Augmented Generation for flexible contract analysis
+- **Gemini AI Integration** - Google's advanced language model for intelligent data extraction
+- **Weighted Scoring System** - Multi-factor confidence scoring with gap analysis
+- **MongoDB Atlas Integration** - Cloud-hosted database with SSL security
+- **Asynchronous Processing** - Non-blocking contract analysis with real-time status updates
 
 ## Authentication
 

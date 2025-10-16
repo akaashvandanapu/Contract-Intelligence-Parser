@@ -1,20 +1,4 @@
 services:
-  # MongoDB Atlas is now used instead of local MongoDB
-  # mongodb:
-  #   image: mongo:7.0
-  #   container_name: contract_mongodb
-  #   restart: unless-stopped
-  #   ports:
-  #     - "27017:27017"
-  #   environment:
-  #     MONGO_INITDB_ROOT_USERNAME: admin
-  #     MONGO_INITDB_ROOT_PASSWORD: password
-  #     MONGO_INITDB_DATABASE: contract_intelligence
-  #   volumes:
-  #     - mongodb_data:/data/db
-  #   networks:
-  #     - contract_network
-
   backend:
     build: ./backend
     container_name: contract_backend
@@ -22,10 +6,12 @@ services:
     ports:
       - "8000:8000"
     environment:
-      MONGODB_URL: mongodb+srv://admin:synchrone@synchrone-contract-inte.8otpltf.mongodb.net/contract_intelligence?retryWrites=true&w=majority&appName=synchrone-contract-intelligence
-      GEMINI_API_KEY: AIzaSyAhf42gdpePPTuIQOU4j2Pl_l758R3eWSw
-      DEBUG: "True"
-      LOG_LEVEL: INFO
+      MONGODB_URL: ${MONGODB_URL}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      DEBUG: ${DEBUG:-True}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    env_file:
+      - .env
     volumes:
       - ./uploads:/app/uploads
       - ./backend:/app
